@@ -76,5 +76,7 @@
     ],
     "volume": 8027.802859643637
   },
-  "cnc_note": "All anatomy, ears, hands, lotus legs, hair ringlets, and Shrivatsa are fused into one shell. No detached parts or deep trapped cavities are intentionally modeled; the leg/pedestal bridge supports 3-axis/4-axis roughing."
+  "cnc_note": "All anatomy, ears, hands, lotus legs, hair ringlets, and Shrivatsa are fused into one shell. No detached parts or deep trapped cavities are intentionally modeled; the leg/pedestal bridge supports 3-axis/4-axis roughing.",
+  "height_datum": "z=0 at bottom of the rectangular charan-chowki/pedestal; z=54 at the top of the ushnisha.",
+  "pedestal_included_in_total_height": true
 }

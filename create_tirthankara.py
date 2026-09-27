@@ -323,6 +323,8 @@ record = {
     "style": "Traditional temple-sculpture base; smooth unadorned polished-marble finish; no clothing, jewelry, shoulder locks, or surface imperfections.",
     "coordinate_system": {"x": "left/right", "y": "front/back; front is negative", "z": "vertical"},
     "unit_note": "Normalized, unitless geometry. Uniformly rescale in CAM.",
+    "height_datum": "z=0 at bottom of the rectangular charan-chowki/pedestal; z=54 at the top of the ushnisha.",
+    "pedestal_included_in_total_height": True,
     "required_measurements": {
         "total_height": 54.0,
         "head_height": 12.0,
