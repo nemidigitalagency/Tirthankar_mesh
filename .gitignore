@@ -1,0 +1,9 @@
+# Dependencies and generated build output
+viewer/node_modules/
+viewer/dist/
+
+# Local/editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp

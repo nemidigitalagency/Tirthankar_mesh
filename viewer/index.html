@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digambar Jain Tirthankara — 3D Mesh Viewer</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">PRATIMA VIGYAN · LIVE MESH VIEWER</div>
+          <h1>Digambar Jain Tirthankara</h1>
+          <p>Padmasana base mesh · normalized height 54 units</p>
+        </div>
+        <div class="status"><span class="status-dot"></span><span id="statusText">Loading mesh…</span></div>
+      </header>
+
+      <main class="stage-wrap">
+        <div id="stage">
+          <div id="loading"><div class="spinner"></div><div>Loading 3D mesh…</div></div>
+          <div id="error" hidden></div>
+          <div class="hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+        </div>
+
+        <aside class="panel">
+          <div class="panel-section">
+            <div class="section-label">MASTER PROPORTIONS</div>
+            <div class="metric"><span>Total height</span><b>54 u</b></div>
+            <div class="metric"><span>Head</span><b>12 u</b></div>
+            <div class="metric"><span>Face width</span><b>14 u</b></div>
+            <div class="metric"><span>Earlobes</span><b>10 u</b></div>
+            <div class="metric"><span>Neck → navel</span><b>24 u</b></div>
+            <div class="metric"><span>Chest width</span><b>24 u</b></div>
+            <div class="metric"><span>Shrivatsa</span><b>4 × 5 u</b></div>
+            <div class="metric"><span>Padmasana mass</span><b>12 u</b></div>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-label">MESH AUDIT</div>
+            <div class="audit-row"><span>Topology</span><b id="topology">—</b></div>
+            <div class="audit-row"><span>Components</span><b id="components">—</b></div>
+            <div class="audit-row"><span>Triangles</span><b id="triangles">—</b></div>
+          </div>
+
+          <div class="panel-section controls">
+            <div class="section-label">VIEW</div>
+            <button id="frontBtn">Front</button>
+            <button id="threeBtn">Three-quarter</button>
+            <button id="resetBtn">Reset view</button>
+            <label class="toggle"><input id="wireToggle" type="checkbox" /> <span>Wireframe overlay</span></label>
+            <label class="toggle"><input id="gridToggle" type="checkbox" checked /> <span>Show ground grid</span></label>
+          </div>
+
+          <div class="panel-footer">Front is y negative<br />Unitless mesh · scale in CAM for fabrication</div>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

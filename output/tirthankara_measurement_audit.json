@@ -1,0 +1,71 @@
+{
+  "title": "Seated Digambar Jain Tirthankara, Padmasana, symmetric base mesh",
+  "source_document": "pratima vigyan.pdf (attached by user)",
+  "coordinate_system": {
+    "x": "left/right",
+    "y": "front/back; front is negative",
+    "z": "vertical"
+  },
+  "unit_note": "Normalized, unitless geometry. Rescale 1 unit to any millimetres/inches in the CAM package.",
+  "required_measurements": {
+    "total_height": 54.0,
+    "head_height": 12.0,
+    "face_width": 14.0,
+    "earlobe_vertical_length": 10.0,
+    "neck_to_navel": 24.0,
+    "chest_width": 24.0,
+    "shrivatsa_envelope_width": 4.0,
+    "shrivatsa_envelope_height": 5.0,
+    "lotus_leg_height": 12.0
+  },
+  "landmarks": {
+    "bottom": 0.0,
+    "navel": 18.0,
+    "neck": 42.0,
+    "head_top": 54.0,
+    "earlobes": [
+      42.0,
+      52.0
+    ],
+    "shrivatsa": {
+      "x": [
+        -2.0,
+        2.0
+      ],
+      "z": [
+        29.0,
+        34.0
+      ]
+    },
+    "lotus": [
+      0.0,
+      12.0
+    ]
+  },
+  "mesh_audit": {
+    "vertices": 184154,
+    "triangles": 368304,
+    "watertight": true,
+    "winding_consistent": true,
+    "connected_components": 1,
+    "bounds_xyz": [
+      [
+        -12.0,
+        -8.649051666259766,
+        0.0
+      ],
+      [
+        12.0,
+        6.499856948852539,
+        54.0
+      ]
+    ],
+    "extents_xyz": [
+      24.0,
+      15.148908615112305,
+      54.0
+    ],
+    "volume": 8595.916423066861
+  },
+  "design_note": "Implicit union creates one closed shell with fused limbs and a shallow fused Shrivatsa; no internal overlapping shells or through-holes are exported."
+}
