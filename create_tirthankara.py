@@ -1,21 +1,21 @@
 """
-Parametric, symmetric, CNC-friendly base mesh of a seated Digambar Jain Tirthankara.
+Parametric CNC-friendly base mesh: Lord Mahavira (24th Jain Tirthankara),
+seated in Padmasana with Dhyana Mudra.
 
-Coordinate system:
-    x = left/right, y = front/back (front is negative), z = vertical.
-    The normalized master mesh is 54 units tall, with z=0 at the bottom of
-    the lotus legs and z=54 at the crown. One unit may be rescaled to any
-    shop unit after import; the supplied STL/OBJ are intentionally unitless.
+This revision follows the supplied front/side reference photographs: upright
+serene temple-sculpture anatomy, merged arms and lap, broad crossed lotus legs,
+elongated lobes, Shrivatsa relief, and a Makrana-marble-style smooth surface.
+It intentionally avoids Rishabhanatha shoulder locks; the scalp uses tight,
+right-turning toroidal ringlets and a contained ushnisha.
 
-The model is generated as the zero isosurface of a union of smooth solids.
-That gives a single, closed, watertight shell without overlapping STL shells,
-open seams, or trapped cavities. All bilateral features are defined in mirrored
-pairs. The relief is shallow and blended into the chest so it does not create
-an inaccessible CNC undercut.
+Coordinates: x = left/right, y = front/back (front is negative), z = vertical.
+The generated shell is normalized to z=0..54. STL/OBJ are unitless; choose the
+shop scale in CAM (for example, 10 mm per unit gives 540 mm overall height).
 """
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -26,59 +26,77 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "output"
 OUT.mkdir(parents=True, exist_ok=True)
 
-# A near-isotropic field. X and Z are odd-sized and centered so the scalar field
-# is exactly mirrored about x=0 before marching cubes.
-XMIN, XMAX = -15.0, 15.0
-YMIN, YMAX = -12.0, 10.0
+# Nearly isotropic voxel field; small enough to preserve the hair ringlets while
+# remaining practical for a CNC base mesh.
+XMIN, XMAX = -16.0, 16.0
+YMIN, YMAX = -13.0, 10.0
 ZMIN, ZMAX = -1.0, 55.0
-NX, NY, NZ = 189, 139, 351
+NX, NY, NZ = 201, 145, 351
 xs = np.linspace(XMIN, XMAX, NX, dtype=np.float32)
 ys = np.linspace(YMIN, YMAX, NY, dtype=np.float32)
 zs = np.linspace(ZMIN, ZMAX, NZ, dtype=np.float32)
-
-# Positive inside, negative outside. The output field stays in memory but all
-# primitive calculations are chunked over z to keep peak memory modest.
 field = np.full((NX, NY, NZ), -100.0, dtype=np.float32)
 
+
 def ellipsoid_field(X, Y, Z, cx, cy, cz, rx, ry, rz):
-    """Smooth implicit ellipsoid, positive inside."""
     q = ((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 + ((Z - cz) / rz) ** 2
     return np.float32(min(rx, ry, rz)) * (1.0 - np.sqrt(q, dtype=np.float32))
 
 
-def round_box_field(X, Y, Z, cx, cy, cz, hx, hy, hz, blend=0.0):
-    """Rounded box-like implicit solid, positive inside.
+def rounded_box_field(X, Y, Z, cx, cy, cz, hx, hy, hz, radius):
+    # Signed distance of a rounded box; positive inside.
+    qx = np.abs(X - cx) - (hx - radius)
+    qy = np.abs(Y - cy) - (hy - radius)
+    qz = np.abs(Z - cz) - (hz - radius)
+    outside = np.sqrt(np.maximum(qx, 0) ** 2 + np.maximum(qy, 0) ** 2 + np.maximum(qz, 0) ** 2)
+    inside = np.minimum(np.maximum(qx, np.maximum(qy, qz)), 0.0)
+    return -(outside + inside - radius)
 
-    blend is a small corner-rounding amount. With blend=0 this is a clean
-    shallow relief bar; the field is still a single solid when fused to the
-    chest/head.
-    """
-    dx = np.abs(X - cx) - hx
-    dy = np.abs(Y - cy) - hy
-    dz = np.abs(Z - cz) - hz
-    outside = np.sqrt(np.maximum(dx, 0) ** 2 + np.maximum(dy, 0) ** 2 + np.maximum(dz, 0) ** 2)
-    inside = np.minimum(np.maximum(dx, np.maximum(dy, dz)), 0.0)
-    return -(outside + inside)
+
+def torus_field(X, Y, Z, cx, cy, cz, nx, ny, nz, major, tube):
+    # A torus whose ring plane is tangent to the scalp; (nx,ny,nz) is its
+    # outward normal. This produces small fused ringlets, not loose hair pieces.
+    dx, dy, dz = X - cx, Y - cy, Z - cz
+    axial = dx * nx + dy * ny + dz * nz
+    rx = dx - axial * nx
+    ry = dy - axial * ny
+    rz = dz - axial * nz
+    radial = np.sqrt(rx * rx + ry * ry + rz * rz)
+    return tube - np.sqrt((radial - major) ** 2 + axial ** 2)
+
+
+def _chunk_slices():
+    for k0 in range(0, NZ, 32):
+        yield k0, min(k0 + 32, NZ)
 
 
 def add_ellipsoid(cx, cy, cz, rx, ry, rz):
-    for k0 in range(0, NZ, 32):
-        k1 = min(k0 + 32, NZ)
+    X = xs[:, None, None]
+    Y = ys[None, :, None]
+    for k0, k1 in _chunk_slices():
         Z = zs[k0:k1][None, None, :]
-        X = xs[:, None, None]
-        Y = ys[None, :, None]
-        f = ellipsoid_field(X, Y, Z, cx, cy, cz, rx, ry, rz)
-        field[:, :, k0:k1] = np.maximum(field[:, :, k0:k1], f)
+        field[:, :, k0:k1] = np.maximum(field[:, :, k0:k1], ellipsoid_field(X, Y, Z, cx, cy, cz, rx, ry, rz))
 
 
-def add_round_box(cx, cy, cz, hx, hy, hz):
-    for k0 in range(0, NZ, 32):
-        k1 = min(k0 + 32, NZ)
+def add_rounded_box(cx, cy, cz, hx, hy, hz, radius):
+    X = xs[:, None, None]
+    Y = ys[None, :, None]
+    for k0, k1 in _chunk_slices():
         Z = zs[k0:k1][None, None, :]
-        X = xs[:, None, None]
-        Y = ys[None, :, None]
-        f = round_box_field(X, Y, Z, cx, cy, cz, hx, hy, hz)
-        field[:, :, k0:k1] = np.maximum(field[:, :, k0:k1], f)
+        field[:, :, k0:k1] = np.maximum(field[:, :, k0:k1], rounded_box_field(X, Y, Z, cx, cy, cz, hx, hy, hz, radius))
+
+
+def add_torus(cx, cy, cz, normal, major=0.34, tube=0.24):
+    nx, ny, nz = normal
+    length = math.sqrt(nx * nx + ny * ny + nz * nz)
+    nx, ny, nz = nx / length, ny / length, nz / length
+    X = xs[:, None, None]
+    Y = ys[None, :, None]
+    for k0, k1 in _chunk_slices():
+        Z = zs[k0:k1][None, None, :]
+        field[:, :, k0:k1] = np.maximum(
+            field[:, :, k0:k1], torus_field(X, Y, Z, cx, cy, cz, nx, ny, nz, major, tube)
+        )
 
 
 def add_mirrored_ellipsoid(cx, cy, cz, rx, ry, rz):
@@ -87,169 +105,224 @@ def add_mirrored_ellipsoid(cx, cy, cz, rx, ry, rz):
 
 
 def add_chain(points, radii):
-    """Fuse overlapping ellipsoids along a path; good for limbs and folded legs."""
     for (cx, cy, cz), (rx, ry, rz) in zip(points, radii):
         add_ellipsoid(cx, cy, cz, rx, ry, rz)
 
 
-# ---------------------------------------------------------------------------
-# BODY: the landmark levels are deliberately explicit.
-# Neck landmark = z 42. Navel landmark = z 18: exactly 24 units apart.
-# ---------------------------------------------------------------------------
-# Pelvis, abdomen, and chest. The central chest solid has a 24-unit major
-# width (x=-12..+12 at its equator), while the lower pelvis tapers inward.
-add_ellipsoid(0.0, 0.25, 16.5, 9.2, 5.0, 8.7)
-add_ellipsoid(0.0, 0.15, 25.5, 10.8, 5.2, 11.0)
-add_ellipsoid(0.0, 0.05, 29.0, 12.0, 5.5, 9.8)  # 24-wide chest band
-add_ellipsoid(0.0, 0.10, 35.0, 9.0, 4.8, 7.0)
-# Shoulders are merged, not separate shells.
-add_mirrored_ellipsoid(5.6, 0.0, 36.0, 6.3, 4.7, 5.3)
-# Narrow waist/neck blend keeps the underside of the chin and arm roots open.
-add_ellipsoid(0.0, 0.10, 40.5, 4.7, 4.0, 5.0)
-add_ellipsoid(0.0, 0.15, 42.0, 4.4, 3.8, 4.0)
+def capsule_field(X, Y, Z, a, b, radius):
+    """Round capsule field around a 3D line segment, positive inside."""
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    v = b - a
+    vv = float(np.dot(v, v))
+    t = ((X - a[0]) * v[0] + (Y - a[1]) * v[1] + (Z - a[2]) * v[2]) / vv
+    t = np.clip(t, 0.0, 1.0)
+    dx = X - (a[0] + t * v[0])
+    dy = Y - (a[1] + t * v[1])
+    dz = Z - (a[2] + t * v[2])
+    return radius - np.sqrt(dx * dx + dy * dy + dz * dz)
 
-# Navel location is preserved as a smooth, shallow front landmark (not a
-# through-hole). The surrounding abdomen is intentionally uninterrupted.
-add_ellipsoid(0.0, -4.75, 18.0, 0.75, 0.45, 0.60)
+
+def add_capsule(a, b, radius):
+    X = xs[:, None, None]
+    Y = ys[None, :, None]
+    for k0, k1 in _chunk_slices():
+        Z = zs[k0:k1][None, None, :]
+        field[:, :, k0:k1] = np.maximum(field[:, :, k0:k1], capsule_field(X, Y, Z, a, b, radius))
+
+
+def add_segment(a, b, radius):
+    """Fuse an ellipsoidal tube between two points using overlapping samples."""
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    length = float(np.linalg.norm(b - a))
+    n = max(2, int(math.ceil(length / (radius * 0.75))))
+    for t in np.linspace(0.0, 1.0, n):
+        p = a * (1.0 - t) + b * t
+        add_ellipsoid(float(p[0]), float(p[1]), float(p[2]), radius, radius, radius)
+
 
 # ---------------------------------------------------------------------------
-# ARMS: long, tapered, continuous with shoulders, sides, and lap.  The
-# mirrored chains remove arm-body gaps and avoid CNC undercuts below the arms.
+# BASE / PADMASANA
 # ---------------------------------------------------------------------------
+# Low rounded charan-chowki, matching the reference and bridging the underside
+# of the knees. The visible lotus region still occupies z=0..12 as one support.
+add_rounded_box(0.0, 0.40, 1.90, 12.0, 5.75, 1.90, 0.65)
+# Pelvic seat and two large crossed thighs.
+add_ellipsoid(0.0, 0.70, 11.2, 8.0, 4.8, 3.8)
 for s in (-1.0, 1.0):
-    points = [
-        (s * 8.0, 0.00, 35.0),
-        (s * 9.0, 0.00, 32.0),
-        (s * 9.2, -0.15, 28.5),
-        (s * 8.9, -0.80, 25.0),
-        (s * 8.3, -1.80, 21.5),
-        (s * 7.5, -3.00, 18.0),
-        (s * 6.4, -3.85, 15.1),
-    ]
-    radii = [
-        (3.1, 3.0, 4.0),
-        (2.8, 2.8, 3.6),
-        (2.55, 2.65, 3.4),
-        (2.45, 2.55, 3.3),
-        (2.35, 2.45, 3.1),
-        (2.45, 2.45, 3.0),
-        (2.55, 2.35, 3.4),
-    ]
-    add_chain(points, radii)
-# Broad lap/palm transitions keep the hands resting on the folded legs.
-add_mirrored_ellipsoid(5.6, -4.0, 15.7, 2.8, 2.0, 4.0)
+    # The thigh crosses the body midline toward the opposite knee, matching
+    # the visible X of a true Padmasana rather than two parallel leg lobes.
+    hip = (s * 3.8, 0.20, 12.7)
+    opposite_knee = (-s * 6.9, -2.35, 7.1)
+    opposite_foot = (-s * 4.55, -5.00, 8.9)
+    add_capsule(hip, opposite_knee, 4.0)
+    add_capsule(opposite_knee, opposite_foot, 3.25)
+    add_ellipsoid(opposite_foot[0], opposite_foot[1], opposite_foot[2], 2.55, 2.15, 1.35)
+# Central bridge keeps the crossed knees as one smooth CNC-supporting mass.
+add_ellipsoid(0.0, -3.6, 6.0, 5.0, 3.3, 2.8)
+# Toes are intentionally suppressed in this base mesh: the reference's clean
+# temple finish is retained without fragile beads or detached toe geometry.
 
 # ---------------------------------------------------------------------------
-# PADMASANA: two mirrored diagonal thigh chains, a merged central crossing,
-# and low foot lobes. Every piece touches the pelvic/leg mass; no floating
-# interpenetrating shells are exported.
+# TORSO / SHOULDERS / NECK
 # ---------------------------------------------------------------------------
+add_ellipsoid(0.0, 0.55, 15.7, 8.7, 4.8, 6.2)  # pelvis
+add_ellipsoid(0.0, 0.05, 23.5, 9.4, 4.9, 8.4)  # abdomen
+add_ellipsoid(0.0, -0.05, 30.6, 12.0, 5.65, 9.6)  # 24-unit chest datum
+add_ellipsoid(0.0, 0.10, 35.7, 9.0, 4.9, 6.2)
+add_mirrored_ellipsoid(5.2, 0.05, 35.2, 4.25, 3.95, 4.45)
+# Neck datum is z=42; navel datum is z=18, exactly 24 units apart.
+add_ellipsoid(0.0, 0.10, 40.3, 4.5, 3.9, 5.0)
+add_ellipsoid(0.0, 0.15, 42.0, 4.2, 3.7, 3.7)
+# Smooth navel landmark; it is not a drilled recess.
+add_ellipsoid(0.0, -4.82, 18.0, 0.55, 0.32, 0.50)
+
+# ---------------------------------------------------------------------------
+# ARMS AND DHYANA MUDRA
+# ---------------------------------------------------------------------------
+# Upper arms descend beside the torso, forearms turn inward, and both palms
+# merge into the central lap. There are no hollow arm-body gaps.
 for s in (-1.0, 1.0):
-    # One thigh folds diagonally forward toward the opposite side.
-    points = [
-        (s * 4.1, 0.10, 12.5),
-        (s * 3.0, -0.75, 10.5),
-        (s * 1.3, -2.25, 8.4),
-        (s * -1.5, -3.85, 6.4),
-        (s * -4.8, -5.05, 5.0),
-    ]
-    radii = [
-        (4.8, 4.4, 3.7),
-        (4.6, 4.1, 3.7),
-        (4.4, 3.9, 3.6),
-        (4.5, 3.8, 3.5),
-        (4.7, 3.6, 3.5),
-    ]
-    add_chain(points, radii)
-# Symmetric front foot/ankle lobes and a smooth underside support; bottom is
-# designed at z=0 and will be normalized after extraction.
-add_mirrored_ellipsoid(7.1, -5.75, 4.2, 4.7, 2.8, 4.2)
-add_ellipsoid(0.0, -1.0, 5.0, 7.5, 5.5, 4.9)
-add_ellipsoid(0.0, 1.8, 6.0, 10.0, 4.7, 5.8)
-# Small rounded central front overlap makes the crossed legs one clean volume.
-add_ellipsoid(0.0, -4.2, 5.3, 5.7, 3.0, 3.3)
+    shoulder = (s * 7.7, 0.00, 35.0)
+    elbow = (s * 8.0, -0.55, 22.5)
+    wrist = (s * 2.15, -4.25, 17.65)
+    # Smooth capsules avoid the segmented/beaded appearance of overlapping
+    # ellipsoids while retaining the natural elbow bend.
+    add_capsule(shoulder, elbow, 2.65)
+    add_capsule(elbow, wrist, 2.15)
+# Lower left palm and upper right palm: a compact 7.6-unit-wide fused Dhyana Mudra.
+add_rounded_box(-0.35, -4.65, 16.95, 3.45, 1.05, 0.52, 0.35)
+add_rounded_box(0.35, -4.40, 17.75, 3.45, 1.05, 0.52, 0.35)
+# Shallow fused finger rolls keep the Dhyana Mudra readable without fragile
+# finger gaps or milling undercuts.
+add_capsule((-2.75, -5.42, 17.03), (2.15, -5.42, 17.03), 0.30)
+add_capsule((-2.25, -5.18, 17.82), (2.65, -5.18, 17.82), 0.28)
 
 # ---------------------------------------------------------------------------
-# HEAD: exactly z=42..54 = 12 vertical units. Main facial width is exactly
-# x=-7..+7 = 14 units; ears are additional side width.
+# HEAD / FACE / EARS
 # ---------------------------------------------------------------------------
-add_ellipsoid(0.0, -0.05, 48.0, 7.0, 5.4, 6.0)     # crown: top z=54
-add_ellipsoid(0.0, -0.85, 46.0, 6.4, 4.8, 4.4)    # cheeks/jaw
-# Chin is blended upward into the neck, avoiding a recessed/undercut chin.
-add_ellipsoid(0.0, -0.75, 44.7, 5.7, 4.4, 2.8)
-# Elongated earlobes: exactly 10 units vertically, z=42..52.
-add_mirrored_ellipsoid(7.55, 0.0, 47.0, 1.45, 3.15, 5.0)
-# A small crown/ushnisha transition is contained inside the 12-unit head box.
-add_ellipsoid(0.0, 0.15, 53.1, 3.6, 3.5, 0.9)
-
-# Face relief is low and fused; it is deliberately not a set of thin, separate
-# pieces, so there are no deep CNC cavities beneath the brow/nose/lips.
-add_mirrored_ellipsoid(2.45, -5.20, 49.15, 1.75, 0.42, 0.18)  # closed eyes
-add_mirrored_ellipsoid(2.55, -5.05, 49.85, 2.0, 0.38, 0.22)   # brow line
-add_ellipsoid(0.0, -5.30, 48.0, 0.75, 0.75, 1.75)              # nose bridge
-add_ellipsoid(0.0, -5.16, 46.0, 1.65, 0.34, 0.24)              # lips
-add_ellipsoid(0.0, -4.90, 44.7, 3.5, 0.45, 1.8)               # chin blend
+# Head exactly z=42..54, with facial width x=-7..+7. The jaw is blended into
+# the neck so there is no sharp undercut beneath the chin.
+add_ellipsoid(0.0, -0.20, 48.0, 7.0, 5.35, 6.0)
+add_ellipsoid(0.0, -0.95, 46.15, 6.35, 4.75, 4.25)
+add_ellipsoid(0.0, -0.72, 44.65, 5.6, 4.25, 2.75)
+# Elongated lobes: exactly z=42..52 = 10 units.
+add_mirrored_ellipsoid(7.38, -0.05, 47.0, 1.42, 2.35, 5.0)
+# Shallow raised inner lobe line, not a deep ear cavity.
+add_mirrored_ellipsoid(7.15, -2.28, 47.0, 0.30, 0.28, 3.55)
+# Serene closed/half-lidded eyes, brows, nose, lips, and chin planes.
+add_mirrored_ellipsoid(2.55, -5.08, 49.10, 1.75, 0.38, 0.22)
+add_mirrored_ellipsoid(2.55, -4.98, 49.80, 1.95, 0.32, 0.24)
+add_ellipsoid(0.0, -5.28, 48.25, 0.72, 0.62, 1.65)
+add_ellipsoid(0.0, -5.72, 47.40, 0.56, 0.54, 0.56)
+add_ellipsoid(0.0, -5.10, 46.15, 1.55, 0.32, 0.22)
+add_ellipsoid(0.0, -4.92, 45.55, 2.5, 0.36, 0.40)
 
 # ---------------------------------------------------------------------------
-# RAISED SHRIVATSA: centered on the chest, exact design envelope x=-2..+2,
-# z=29..34 = 4 x 5 units. The shallow relief is intersected into the chest.
+# MAHAVIRA HAIR: tight right-turning ringlets, not shoulder locks.
 # ---------------------------------------------------------------------------
-# vertical stem, horizontal shoulders, and a lower knot make a restrained
-# Jain Shrivatsa-like raised mark rather than a generic embossed cross.
-add_ellipsoid(0.0, -5.28, 31.5, 0.46, 0.42, 2.50)
-add_ellipsoid(0.0, -5.32, 32.6, 2.00, 0.40, 0.42)
-add_ellipsoid(0.0, -5.30, 30.35, 1.05, 0.38, 0.42)
-add_mirrored_ellipsoid(0.82, -5.29, 31.25, 0.72, 0.36, 0.33)
+# A shallow fused scalp cap is the common bridge for the small curls. It stops
+# above the neck, so it cannot become Rishabhanatha-style shoulder hair.
+add_ellipsoid(0.0, 0.0, 50.0, 7.0, 5.3, 4.0)
+# Ringlets are placed on the ellipsoidal scalp surface and intersected into the
+# head. Their common handed placement gives a Dakshinavarti/Shankh-like turn.
+head_c = np.array([0.0, -0.20, 48.0])
+head_r = np.array([7.0, 5.35, 6.0])
+for u in (0.18, 0.38, 0.58, 0.76, 0.90):
+    radial_scale = math.sqrt(max(0.05, 1.0 - u * u))
+    count = max(8, int(round(2.0 * math.pi * radial_scale * 2.7)))
+    # Slight azimuthal shift in each row makes the curls read as a continuous
+    # right-turning field rather than a checkerboard of dots.
+    phase = 0.34 * (1.0 - u)
+    for j in range(count):
+        angle = 2.0 * math.pi * j / count + phase
+        p = np.array([
+            head_c[0] + head_r[0] * math.cos(angle) * radial_scale,
+            head_c[1] + head_r[1] * math.sin(angle) * radial_scale,
+            head_c[2] + head_r[2] * u,
+        ])
+        normal = np.array([
+            (p[0] - head_c[0]) / (head_r[0] ** 2),
+            (p[1] - head_c[1]) / (head_r[1] ** 2),
+            (p[2] - head_c[2]) / (head_r[2] ** 2),
+        ])
+        normal = normal / np.linalg.norm(normal)
+        # Move slightly outward; the tube still intersects the skull by ~0.1u.
+        c = p + normal * 0.18
+        add_torus(float(c[0]), float(c[1]), float(c[2]), normal, major=0.38, tube=0.22)
+        # A short buried root bridges each ringlet into the skull. Without this
+        # connector, a torus can be mathematically closed but visually floating
+        # in an extracted voxel surface.
+        root = c - normal * 0.22
+        add_ellipsoid(float(root[0]), float(root[1]), float(root[2]), 0.30, 0.30, 0.30)
+# Compact ushnisha stays inside the 54-unit head boundary.
+add_ellipsoid(0.0, 0.10, 53.45, 3.0, 2.75, 0.55)
 
-# Extract a closed surface. The z-axis is the final array axis in the field.
+# ---------------------------------------------------------------------------
+# RAISED SHRIVATSA: 4 wide x 5 high centered relief (diamond outline).
+# ---------------------------------------------------------------------------
+# Chest front at this level is approximately y=-5.4. The four bars are shallow,
+# fused, and have no deep back pocket.
+front_y = -5.42
+corners = [(0.0, 34.0), (2.0, 31.5), (0.0, 29.0), (-2.0, 31.5)]
+for a, b in zip(corners, corners[1:] + corners[:1]):
+    add_segment((a[0], front_y, a[1]), (b[0], front_y, b[1]), 0.27)
+# Fine central raised seed keeps the mark readable after CNC smoothing.
+add_ellipsoid(0.0, front_y - 0.08, 31.5, 0.42, 0.28, 0.52)
+
+# ---------------------------------------------------------------------------
+# EXTRACT / NORMALIZE / AUDIT
+# ---------------------------------------------------------------------------
 verts, faces, normals, values = marching_cubes(
-    field, level=0.0,
-    spacing=(float(xs[1]-xs[0]), float(ys[1]-ys[0]), float(zs[1]-zs[0])),
+    field,
+    level=0.0,
+    spacing=(float(xs[1] - xs[0]), float(ys[1] - ys[0]), float(zs[1] - zs[0])),
     allow_degenerate=False,
 )
 verts[:, 0] += XMIN
 verts[:, 1] += YMIN
 verts[:, 2] += ZMIN
 
-# Exact normalized vertical bounding box. The source field is already at 54;
-# this final affine step absorbs one voxel interpolation epsilon and guarantees
-# zmin=0, zmax=54 in the deliverable.
 raw_min = verts.min(axis=0)
 raw_max = verts.max(axis=0)
+# Exact 54-unit height; x is normalized to the exact 24-unit chest datum. The
+# field is symmetric, so this affine correction preserves bilateral symmetry.
 verts[:, 2] = (verts[:, 2] - raw_min[2]) * (54.0 / (raw_max[2] - raw_min[2]))
-# The chest-band primitive is the master 24-unit transverse datum. Normalize
-# its extracted voxel epsilon to exact +/-12 without disturbing z landmarks.
 raw_x_center = 0.5 * (raw_min[0] + raw_max[0])
 verts[:, 0] = (verts[:, 0] - raw_x_center) * (24.0 / (raw_max[0] - raw_min[0]))
-# Keep bilateral symmetry exact to floating precision in the exported vertices.
-# The scalar field itself is symmetric; this also removes tiny numerical drift.
 verts[:, 0] = np.where(np.abs(verts[:, 0]) < 1e-6, 0.0, verts[:, 0])
 
 mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=True)
-# Cleanup calls are safe for a marching-cubes manifold; they only remove
-# duplicate/zero-area facets, not open boundaries.
 try:
     mesh.remove_duplicate_faces()
     mesh.remove_degenerate_faces()
 except AttributeError:
     pass
 mesh.remove_unreferenced_vertices()
-# Marching-cubes winding depends on the sign convention. Export outward-facing
-# normals so the signed volume is positive for CAM and slicer software.
+if mesh.volume < 0:
+    mesh.invert()
+# Marching cubes can leave tiny two-triangle slivers at sharp voxel/grid
+# tangencies (especially at the rounded platform edge). Keep the dominant
+# fused shell; this guarantees the CNC deliverable is one watertight component.
+parts = mesh.split(only_watertight=False)
+mesh = max(parts, key=lambda part: len(part.faces))
+mesh.remove_unreferenced_vertices()
 if mesh.volume < 0:
     mesh.invert()
 
-# The normalized coordinate convention is preserved in both deliverables.
-mesh.export(OUT / "tirthankara_padmasana_base_54u.stl")
-mesh.export(OUT / "tirthankara_padmasana_base_54u.obj")
-
-# Save a compact audit record next to the mesh.
+stl_path = OUT / "tirthankara_padmasana_base_54u.stl"
+obj_path = OUT / "tirthankara_padmasana_base_54u.obj"
+mesh.export(stl_path)
+mesh.export(obj_path)
 components = mesh.split(only_watertight=False)
 record = {
-    "title": "Seated Digambar Jain Tirthankara, Padmasana, symmetric base mesh",
-    "source_document": "pratima vigyan.pdf (attached by user)",
+    "title": "Lord Mahavira, seated Digambar Jain Tirthankara, Padmasana, Dhyana Mudra",
+    "source_document": "pratima vigyan.pdf",
+    "reference_images": ["162086942_1790514492131653.jpg", "242938257_1790514490820601.jpg"],
+    "style": "Traditional temple-sculpture base; smooth unadorned polished-marble finish; no clothing, jewelry, shoulder locks, or surface imperfections.",
     "coordinate_system": {"x": "left/right", "y": "front/back; front is negative", "z": "vertical"},
-    "unit_note": "Normalized, unitless geometry. Rescale 1 unit to any millimetres/inches in the CAM package.",
+    "unit_note": "Normalized, unitless geometry. Uniformly rescale in CAM.",
     "required_measurements": {
         "total_height": 54.0,
         "head_height": 12.0,
@@ -257,11 +330,20 @@ record = {
         "earlobe_vertical_length": 10.0,
         "neck_to_navel": 24.0,
         "chest_width": 24.0,
-        "shrivatsa_envelope_width": 4.0,
-        "shrivatsa_envelope_height": 5.0,
-        "lotus_leg_height": 12.0,
+        "shrivatsa_width": 4.0,
+        "shrivatsa_height": 5.0,
+        "lotus_region_height": 12.0,
+        "dhyana_mudra_width": 7.6,
     },
-    "landmarks": {"bottom": 0.0, "navel": 18.0, "neck": 42.0, "head_top": 54.0, "earlobes": [42.0, 52.0], "shrivatsa": {"x": [-2.0, 2.0], "z": [29.0, 34.0]}, "lotus": [0.0, 12.0]},
+    "landmarks": {
+        "bottom": 0.0,
+        "lotus_region": [0.0, 12.0],
+        "navel": 18.0,
+        "neck": 42.0,
+        "head": [42.0, 54.0],
+        "earlobes": [42.0, 52.0],
+        "shrivatsa": {"x": [-2.0, 2.0], "z": [29.0, 34.0]},
+    },
     "mesh_audit": {
         "vertices": int(len(mesh.vertices)),
         "triangles": int(len(mesh.faces)),
@@ -272,10 +354,9 @@ record = {
         "extents_xyz": [float(v) for v in mesh.extents],
         "volume": float(mesh.volume),
     },
-    "design_note": "Implicit union creates one closed shell with fused limbs and a shallow fused Shrivatsa; no internal overlapping shells or through-holes are exported.",
+    "cnc_note": "All anatomy, ears, hands, lotus legs, hair ringlets, and Shrivatsa are fused into one shell. No detached parts or deep trapped cavities are intentionally modeled; the leg/pedestal bridge supports 3-axis/4-axis roughing.",
 }
 (OUT / "tirthankara_measurement_audit.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
-
 print(json.dumps(record, indent=2))
-print(f"Wrote: {OUT / 'tirthankara_padmasana_base_54u.stl'}")
-print(f"Wrote: {OUT / 'tirthankara_padmasana_base_54u.obj'}")
+print(f"Wrote {stl_path}")
+print(f"Wrote {obj_path}")

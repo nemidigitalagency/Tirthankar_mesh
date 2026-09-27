@@ -1,6 +1,6 @@
-# Digambar Jain Tirthankara — Padmasana base mesh
+# Lord Mahavira — Digambar Jain Tirthankara, Padmasana base mesh
 
-Generated from the attached **`pratima vigyan.pdf`** and the master constraints in the request. This is a symmetrical, normalized base mesh intended for further sculpting or CNC/CAM preparation.
+Generated from the attached **`pratima vigyan.pdf`** and the supplied front/side reference images. This revision is a symmetrical, normalized CNC base of Lord Mahavira in seated Padmasana with Dhyana Mudra, intended for further sculpting or CNC/CAM preparation.
 
 ## Files
 

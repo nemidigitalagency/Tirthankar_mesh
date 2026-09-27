@@ -1,12 +1,17 @@
 {
-  "title": "Seated Digambar Jain Tirthankara, Padmasana, symmetric base mesh",
-  "source_document": "pratima vigyan.pdf (attached by user)",
+  "title": "Lord Mahavira, seated Digambar Jain Tirthankara, Padmasana, Dhyana Mudra",
+  "source_document": "pratima vigyan.pdf",
+  "reference_images": [
+    "162086942_1790514492131653.jpg",
+    "242938257_1790514490820601.jpg"
+  ],
+  "style": "Traditional temple-sculpture base; smooth unadorned polished-marble finish; no clothing, jewelry, shoulder locks, or surface imperfections.",
   "coordinate_system": {
     "x": "left/right",
     "y": "front/back; front is negative",
     "z": "vertical"
   },
-  "unit_note": "Normalized, unitless geometry. Rescale 1 unit to any millimetres/inches in the CAM package.",
+  "unit_note": "Normalized, unitless geometry. Uniformly rescale in CAM.",
   "required_measurements": {
     "total_height": 54.0,
     "head_height": 12.0,
@@ -14,15 +19,23 @@
     "earlobe_vertical_length": 10.0,
     "neck_to_navel": 24.0,
     "chest_width": 24.0,
-    "shrivatsa_envelope_width": 4.0,
-    "shrivatsa_envelope_height": 5.0,
-    "lotus_leg_height": 12.0
+    "shrivatsa_width": 4.0,
+    "shrivatsa_height": 5.0,
+    "lotus_region_height": 12.0,
+    "dhyana_mudra_width": 7.6
   },
   "landmarks": {
     "bottom": 0.0,
+    "lotus_region": [
+      0.0,
+      12.0
+    ],
     "navel": 18.0,
     "neck": 42.0,
-    "head_top": 54.0,
+    "head": [
+      42.0,
+      54.0
+    ],
     "earlobes": [
       42.0,
       52.0
@@ -36,36 +49,32 @@
         29.0,
         34.0
       ]
-    },
-    "lotus": [
-      0.0,
-      12.0
-    ]
+    }
   },
   "mesh_audit": {
-    "vertices": 184154,
-    "triangles": 368304,
+    "vertices": 182681,
+    "triangles": 365366,
     "watertight": true,
     "winding_consistent": true,
     "connected_components": 1,
     "bounds_xyz": [
       [
         -12.0,
-        -8.649051666259766,
+        -8.249181747436523,
         0.0
       ],
       [
         12.0,
-        6.499856948852539,
+        6.150012969970703,
         54.0
       ]
     ],
     "extents_xyz": [
       24.0,
-      15.148908615112305,
+      14.399194717407227,
       54.0
     ],
-    "volume": 8595.916423066861
+    "volume": 8027.802859643637
   },
-  "design_note": "Implicit union creates one closed shell with fused limbs and a shallow fused Shrivatsa; no internal overlapping shells or through-holes are exported."
+  "cnc_note": "All anatomy, ears, hands, lotus legs, hair ringlets, and Shrivatsa are fused into one shell. No detached parts or deep trapped cavities are intentionally modeled; the leg/pedestal bridge supports 3-axis/4-axis roughing."
 }
